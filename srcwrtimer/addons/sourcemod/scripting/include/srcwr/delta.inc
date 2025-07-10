@@ -6,7 +6,7 @@
 
 
 typeset ReplaySavedCallback {
-	function void(bool saved, any value);
+	function void(bool saved, any value, char[] sPath);
 }
 
 
@@ -15,7 +15,12 @@ native void SRCWRDELTA_AsyncSaveReplay(
 	// required & will throw an error if you don't use the supported versions...
 	  char replayfmt
 	, int replaysubversion
+	// what to call when saved
 	, ReplaySavedCallback callback
+	// what to pass along to the callback
+	, any value
+
+	, char[] replayFolder
 	// copy of SaveReplay() params
 	, int style
 	, int track
@@ -29,8 +34,6 @@ native void SRCWRDELTA_AsyncSaveReplay(
 	, float fZoneOffset[2]
 	, bool saveCopy
 	, bool saveWR
-	, char[] sPath
-	, int sPathLen
 );
 
 
