@@ -1,3 +1,25 @@
 extend = "../srcwrtimer/Makefile.toml"
 [env]
 SRCWRTIMER_ROOT_DIR="${CARGO_MAKE_WORKING_DIRECTORY}/../srcwrtimer"
+
+# only way to get me emojissss
+[tasks.copy-extensions]
+script_runner = "@duckscript"
+script = '''
+fn copy_ext
+	extdir = set "${PACKAGEDIR}/srcwrtimer/addons/sourcemod/extensions${3}"
+	rm "${extdir}/srcwr💾.ext.dll"
+	rm "${extdir}/srcwr💾.pdb"
+	rm "${extdir}/srcwr💾.ext.so"
+	if is_path_exists "${2}/${4}-pc-windows-msvc/release/srcwrfloppy.dll"
+		cp "${2}/${4}-pc-windows-msvc/release/srcwrfloppy.dll"       "${extdir}/srcwr💾.ext.dll"
+		cp "${2}/${4}-pc-windows-msvc/release/srcwrfloppy.pdb"       "${extdir}/srcwr💾.pdb"
+	end
+	if is_path_exists "${2}/${4}-unknown-linux-gnu/release/libsrcwrfloppy.so"
+		cp "${2}/${4}-unknown-linux-gnu/release/libsrcwrfloppy.so"   "${extdir}/srcwr💾.ext.so"
+	end
+end
+
+copy_ext "" "${CARGO_MAKE_WORKING_DIRECTORY}/_build/" "" "i686"
+copy_ext "" "${CARGO_MAKE_WORKING_DIRECTORY}/_build" "/x64" "x86_64"
+'''

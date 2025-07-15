@@ -16,7 +16,7 @@ typeset ReplaySavedCallback {
 // Don't modify the `playerrecording` ArrayList until the ReplaySavedCallback is called... OR ELSE!!!!
 native void SRCWRFloppy_AsyncSaveReplay(
 	// required & will throw an error if you don't use the supported versions...
-	  char replayfmt
+	  char[] replayfmt
 	, int replaysubversion
 	// what to call when saved
 	, ReplaySavedCallback callback
