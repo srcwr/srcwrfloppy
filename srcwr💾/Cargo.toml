@@ -16,4 +16,3 @@ extshared_build_helper.workspace = true
 
 [dependencies]
 extshared.workspace = true
-byteorder = "1"
