@@ -90,8 +90,8 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 	Handle_t playerrecording = params[12];
 	if (HandleError err = ReadHandleCoreIdent(playerrecording, g_ArrayListType, (void **)&arraylist); err != HandleError_None)
 		return ctx->ThrowNativeError("Invalid ArrayList Handle %x (error %d)", playerrecording, err);
-	printf("playerrecording: %x\narraylist: %x\n", playerrecording, arraylist);
-	printf("value: %x\n", value);
+	//printf("playerrecording: %x\narraylist: %x\n", playerrecording, arraylist);
+	//printf("value: %x\n", value);
 	int iSize = params[13];
 	int postframes = params[14];
 	int timestamp = params[15];
