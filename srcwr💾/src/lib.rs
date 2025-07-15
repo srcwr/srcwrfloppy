@@ -19,6 +19,7 @@ use std::thread::JoinHandle;
 
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
+use extshared::cpp_extension_log_error;
 use extshared::ICellArray::ICellArray;
 use extshared::cpp_add_frame_action;
 use extshared::cpp_forward_execute;
@@ -173,9 +174,12 @@ fn replay_thread(recv: Receiver<Msg>) {
 
 		let mut fCopy = if msg.saveCopy {
 			callbackPath = format!("copy/{}_{}_{}.replay", msg.timestamp, msg.steamid, msg.map);
-			std::fs::File::create(msg.replayFolder.join(&callbackPath))
-				.map(std::io::BufWriter::new)
-				.ok()
+			if let Ok(f) = std::fs::File::create(msg.replayFolder.join(&callbackPath)).map(std::io::BufWriter::new) {
+				Some(f)
+			} else {
+				log_error(format!("Failed to open 'copy' replay file for writing. ('{callbackPath}')"));
+				None
+			}
 		} else {
 			None
 		};
@@ -185,15 +189,21 @@ fn replay_thread(recv: Receiver<Msg>) {
 			} else {
 				format!("{}/{}.replay", msg.style, msg.map)
 			};
-			std::fs::File::create(msg.replayFolder.join(&callbackPath))
-				.map(std::io::BufWriter::new)
-				.ok()
+			if let Ok(f) = std::fs::File::create(msg.replayFolder.join(&callbackPath)).map(std::io::BufWriter::new) {
+				Some(f)
+			} else {
+				log_error(format!("Failed to open WR replay file for writing. ('{callbackPath}')"));
+				None
+			}
 		} else {
 			None
 		};
 
 		if fCopy.is_none() && fWR.is_none() {
-			// TODO: fuck
+			log_error(format!(
+				"Failed to open WR and 'copy' replay files for writing [U:1:{}] style={} track={} map={}",
+				msg.steamid, msg.style, msg.track, msg.map
+			));
 			continue;
 		}
 
@@ -245,5 +255,19 @@ unsafe extern "C" fn do_callback(data: *mut c_void) {
 		cpp_forward_push_cell(data.forward, data.value);
 		cpp_forward_push_string(data.forward, data.path.as_ptr());
 		cpp_forward_execute(data.forward, &mut 0);
+	}
+}
+
+unsafe extern "C" fn log_error_frame_action(error: *mut c_void) {
+	unsafe {
+		let mut error = Box::from_raw(error as *mut String);
+		error.push('\0');
+		cpp_extension_log_error(error.as_ptr());
+	}
+}
+
+fn log_error(error: String) {
+	unsafe {
+		cpp_add_frame_action(log_error_frame_action, Box::leak(Box::new(error)) as *mut _ as *mut c_void);
 	}
 }
