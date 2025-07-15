@@ -39,6 +39,7 @@ static mut THREAD: Option<JoinHandle<()>> = None;
 const REPLAY_VERSION: &[u8] = b"9:{SHAVITREPLAYFORMAT}{FINAL}\n";
 const FRAME_T_SIZE: usize = 10 * 4;
 
+#[derive(Debug)]
 struct Msg {
 	forward:          NonNull<c_void>,
 	value:            i32,
@@ -115,6 +116,7 @@ pub extern "C" fn rust_post_to_replay_thread(
 	let replayFolderOrig = strxx(replayFolderOrig, false, 0).unwrap().to_string();
 	let replayFolder = PathBuf::from_str(strxx(replayFolder, false, 0).unwrap()).unwrap();
 	let map = strxx(map, false, 0).unwrap().to_string();
+	//println!("hello from poster!");
 	unsafe {
 		if let Some(sender) = &SENDER {
 			sender
@@ -139,6 +141,7 @@ pub extern "C" fn rust_post_to_replay_thread(
 					tickrate,
 				})
 				.unwrap();
+			//println!("posted!");
 		}
 	}
 	//
@@ -165,6 +168,7 @@ fn write_replay_header(file: &mut BufWriter<std::fs::File>, msg: &Msg) {
 
 fn replay_thread(recv: Receiver<Msg>) {
 	while let Ok(msg) = recv.recv() {
+		//println!("received {msg:?}");
 		let mut callbackPath = String::new();
 
 		let mut fCopy = if msg.saveCopy {
@@ -237,6 +241,7 @@ unsafe extern "C" fn do_callback(data: *mut c_void) {
 	unsafe {
 		let data = Box::from_raw(data as *mut Callbacker);
 		cpp_forward_push_cell(data.forward, 1); // saved -- TODO
+		//println!("data.value: {:x}", data.value);
 		cpp_forward_push_cell(data.forward, data.value);
 		cpp_forward_push_string(data.forward, data.path.as_ptr());
 		cpp_forward_execute(data.forward, &mut 0);

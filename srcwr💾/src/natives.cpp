@@ -13,11 +13,7 @@ void rust_setup_replay_thread();
 void rust_KILL_replay_thread();
 
 void rust_post_to_replay_thread(
-	// bitch
-	  const char* replayfmt
-	, int replaysubversion
-	//
-	, IChangeableForward* forward
+	  IChangeableForward* forward
 	// what to pass along to the callback
 	, int value
 	// blahlahalkahlalkhlk
@@ -27,17 +23,17 @@ void rust_post_to_replay_thread(
 	// copy of SaveReplay() params
 	, int style
 	, int track
-	, float time
+	, int time
 	, int steamid
 	, int preframes
 	, void* playerrecording
 	, int iSize
 	, int postframes
 	, int timestamp
-	, float* fZoneOffset
+	, int* fZoneOffset
 	, bool saveCopy
 	, bool saveWR
-	, float tickrate
+	, int tickrate
 );
 
 }
@@ -81,28 +77,30 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 
 	char *replayFolderOrig, replayFolder[PLATFORM_MAX_PATH];
 	(void)ctx->LocalToString(params[5], &replayFolderOrig);
-	smutils->BuildPath(Path_SM, replayFolder, sizeof(replayFolder), "%s", replayFolderOrig);
+	smutils->BuildPath(Path_Game, replayFolder, sizeof(replayFolder), "%s", replayFolderOrig);
 	char *map;
-	(void)ctx->LocalToString(params[6], &replayFolderOrig);
+	(void)ctx->LocalToString(params[6], &map);
 
 	int style = params[7];
 	int track = params[8];
-	float time = params[9];
+	int time = params[9];
 	int steamid = params[10];
 	int preframes = params[11];
 	ICellArray *arraylist;
 	Handle_t playerrecording = params[12];
 	if (HandleError err = ReadHandleCoreIdent(playerrecording, g_ArrayListType, (void **)&arraylist); err != HandleError_None)
 		return ctx->ThrowNativeError("Invalid ArrayList Handle %x (error %d)", playerrecording, err);
+	printf("playerrecording: %x\narraylist: %x\n", playerrecording, arraylist);
+	printf("value: %x\n", value);
 	int iSize = params[13];
 	int postframes = params[14];
 	int timestamp = params[15];
-	float* fZoneOffset;
+	int* fZoneOffset;
 	if (SP_ERROR_NONE != ctx->LocalToPhysAddr(params[16], (cell_t**)&fZoneOffset))
 		return ctx->ThrowNativeError("fuck");
 	bool saveCopy = params[17];
 	bool saveWR = params[18];
-	float tickrate = params[19];
+	int tickrate = params[19];
 
 	IChangeableForward* fw = forwards->CreateForwardEx(
 		  NULL
@@ -122,9 +120,7 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 	}
 
 	rust_post_to_replay_thread(
-		  replayfmt
-		, replaysubversion
-		, fw
+		  fw
 		, value
 		, replayFolderOrig
 		, replayFolder
