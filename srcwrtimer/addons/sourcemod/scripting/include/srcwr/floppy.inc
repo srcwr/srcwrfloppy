@@ -1,7 +1,10 @@
-#if defined _delta_included
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright 2025 rtldg <rtldg@protonmail.com>
+
+#if defined _floppy_included
 	#endinput
 #endif
-#define _delta_included
+#define _floppy_included
 #pragma semicolon 1
 
 
@@ -11,7 +14,7 @@ typeset ReplaySavedCallback {
 
 
 // Don't modify the `playerrecording` ArrayList until the ReplaySavedCallback is called... OR ELSE!!!!
-native void SRCWRDELTA_AsyncSaveReplay(
+native void SRCWRFloppy_AsyncSaveReplay(
 	// required & will throw an error if you don't use the supported versions...
 	  char replayfmt
 	, int replaysubversion
@@ -21,6 +24,7 @@ native void SRCWRDELTA_AsyncSaveReplay(
 	, any value
 
 	, char[] replayFolder
+	, char[] map
 	// copy of SaveReplay() params
 	, int style
 	, int track
@@ -34,13 +38,14 @@ native void SRCWRDELTA_AsyncSaveReplay(
 	, float fZoneOffset[2]
 	, bool saveCopy
 	, bool saveWR
+	, float tickrate
 );
 
 
-public Extension __ext_srcwrdelta =
+public Extension __ext_srcwrfloppy =
 {
-	name = "srcwrdelta",
-	file = "srcwrdelta.ext",
+	name = "srcwr💾",
+	file = "srcwr💾.ext",
 #if defined AUTOLOAD_EXTENSIONS
 	autoload = 1,
 #else
@@ -54,8 +59,8 @@ public Extension __ext_srcwrdelta =
 };
 
 #if !defined REQUIRE_EXTENSIONS
-public void __ext_delta_SetNTVOptional()
+public void __ext_floppy_SetNTVOptional()
 {
-	MarkNativeAsOptional("SRCWRDELTA_AsyncSaveReplay");
+	MarkNativeAsOptional("SRCWRFloppy_AsyncSaveReplay");
 }
 #endif

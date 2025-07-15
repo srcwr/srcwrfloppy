@@ -1,7 +1,7 @@
 [package]
-name = "srcwrdelta"
+name = "srcwrfloppy"
 authors = ["rtldg <rtldg@protonmail.com>"]
-description = "sav ur replayz butt wit no lag!!"
+description = "💾 ur replayz butt wit no lag!!"
 license = "GPL-3.0-or-later"
 version.workspace = true
 edition.workspace = true
@@ -16,3 +16,4 @@ extshared_build_helper.workspace = true
 
 [dependencies]
 extshared.workspace = true
+byteorder = "1"
