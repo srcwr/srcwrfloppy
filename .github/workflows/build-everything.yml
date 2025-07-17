@@ -52,10 +52,6 @@ jobs:
       - name: Clone alliedmodders repositories
         run: cargo make clone-alliedmodders
         working-directory: ./srcwrfloppy
-      - name: Setup SourcePawn Compiler
-        uses: rumblefrog/setup-sp@v1.2.4
-        with:
-          version: '1.12.7210' ### UPDATE Makefile.toml whenever this is updated.
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
@@ -68,9 +64,6 @@ jobs:
         run: |
           cargo make copy-srcwrtimer
           cargo make copy-extensions
-      - name: Build plugins
-        working-directory: ./srcwrfloppy
-        run: cargo make compile-srcwrtimer-scripts
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
