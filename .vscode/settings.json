@@ -9,6 +9,7 @@
 		"**/target": true
 	},
 	"files.associations": {
-		"*.inc": "cpp"
+		"*.inc": "cpp",
+		"*.sp": "cpp"
 	}
 }
