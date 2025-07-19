@@ -52,7 +52,7 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 	cell_t callback = params[1];
 	int value = params[2];
 
-	char *wrpath_friendly, wrpath[PLATFORM_MAX_PATH], *copypath_friendly, copypath[PLATFORM_MAX_PATH];
+	char *wrpath_friendly, *copypath_friendly, wrpath[PLATFORM_MAX_PATH]{}, copypath[PLATFORM_MAX_PATH]{};
 	(void)ctx->LocalToString(params[3], &wrpath_friendly);
 	(void)ctx->LocalToString(params[4], &copypath_friendly);
 	if (wrpath_friendly[0]) smutils->BuildPath(Path_Game, wrpath, sizeof(wrpath), "%s", wrpath_friendly);
