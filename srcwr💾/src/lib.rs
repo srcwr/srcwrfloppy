@@ -47,7 +47,7 @@ unsafe impl Send for Msg {} // so we can store the pointers...
 
 struct Callbacker {
 	forward: NonNull<c_void>,
-	//saved: bool,
+	saved:   bool,
 	value:   i32,
 	path:    String,
 }
@@ -136,28 +136,34 @@ fn replay_thread(recv: Receiver<Msg>) {
 			}
 		}
 
-		if fcopy.is_none() && fwr.is_none() {
-			continue;
-		}
+		let mut saved = false;
 
-		let cellarray = unsafe { &mut *msg.playerrecording };
-		let frames =
-			unsafe { std::slice::from_raw_parts(cellarray.data as *const u8, cellarray.blocksize * 4 * msg.totalframes) };
+		if fcopy.is_some() || fwr.is_some() {
+			saved = true;
 
-		if let Some(f) = &mut fwr {
-			let _ = f.write_all(&msg.header);
-			let _ = f.write_all(frames);
-		}
-		if let Some(f) = &mut fcopy {
-			let _ = f.write_all(&msg.header);
-			let _ = f.write_all(frames);
-		}
+			let cellarray = unsafe { &mut *msg.playerrecording };
+			let frames = unsafe {
+				std::slice::from_raw_parts(
+					cellarray.data as *const u8,
+					cellarray.blocksize * size_of::<i32>() * msg.totalframes,
+				)
+			};
 
-		if let Some(mut f) = fcopy {
-			let _ = f.flush();
-		}
-		if let Some(mut f) = fwr {
-			let _ = f.flush();
+			if let Some(f) = &mut fwr {
+				let _ = f.write_all(&msg.header);
+				let _ = f.write_all(frames);
+			}
+			if let Some(f) = &mut fcopy {
+				let _ = f.write_all(&msg.header);
+				let _ = f.write_all(frames);
+			}
+
+			if let Some(mut f) = fcopy {
+				let _ = f.flush();
+			}
+			if let Some(mut f) = fwr {
+				let _ = f.flush();
+			}
 		}
 
 		unsafe {
@@ -165,7 +171,7 @@ fn replay_thread(recv: Receiver<Msg>) {
 				do_callback,
 				Box::leak(Box::new(Callbacker {
 					forward: msg.forward,
-					//saved: ?
+					saved:   saved,
 					value:   msg.value,
 					path:    msg.sm_friendly_path,
 				})) as *mut _ as *mut c_void,
@@ -177,7 +183,7 @@ fn replay_thread(recv: Receiver<Msg>) {
 unsafe extern "C" fn do_callback(data: *mut c_void) {
 	unsafe {
 		let mut data = Box::from_raw(data as *mut Callbacker);
-		cpp_forward_push_cell(data.forward, 1); // saved -- TODO
+		cpp_forward_push_cell(data.forward, data.saved as i32);
 		//println!("data.value: {:x}", data.value);
 		cpp_forward_push_cell(data.forward, data.value);
 		data.path.push('\0');
