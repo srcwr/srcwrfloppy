@@ -36,8 +36,7 @@ static mut THREAD: Option<JoinHandle<()>> = None;
 struct Msg {
 	forward:          NonNull<c_void>,
 	value:            i32,
-	wrpath:           String,
-	copypath:         String,
+	paths:            Vec<String>,
 	header:           Vec<u8>,
 	playerrecording:  *mut ICellArray,
 	totalframes:      usize,
@@ -79,16 +78,22 @@ pub extern "C" fn rust_KILL_replay_thread() {
 pub extern "C" fn rust_post_to_replay_thread(
 	forward: NonNull<c_void>,
 	value: i32,
-	wrpath: *const c_char,
-	copypath: *const c_char,
+	mut pathschars: *const *const c_char,
 	header: *const u8,
 	headersize: usize,
 	playerrecording: *mut ICellArray,
 	totalframes: usize,
 	sm_friendly_path: *const c_char,
 ) {
-	let wrpath = strxx(wrpath, false, 0).unwrap_or_default().to_string();
-	let copypath = strxx(copypath, false, 0).unwrap_or_default().to_string();
+	let mut pathsvec = vec![];
+
+	unsafe {
+		while !((*pathschars).is_null()) {
+			pathsvec.push(strxx(*pathschars, false, 0).unwrap_or_default().to_string());
+			pathschars = pathschars.add(1);
+		}
+	}
+
 	let sm_friendly_path = strxx(sm_friendly_path, false, 0).unwrap().to_string();
 
 	let header = unsafe { std::slice::from_raw_parts(header, headersize).to_vec() };
@@ -100,8 +105,7 @@ pub extern "C" fn rust_post_to_replay_thread(
 				.send(Msg {
 					forward,
 					value,
-					wrpath,
-					copypath,
+					paths: pathsvec,
 					header,
 					playerrecording,
 					totalframes,
@@ -117,30 +121,19 @@ fn replay_thread(recv: Receiver<Msg>) {
 	while let Ok(msg) = recv.recv() {
 		//println!("received {msg:?}");
 
-		let mut fcopy = None;
-		let mut fwr = None;
+		let mut writers = vec![];
 
-		if !msg.copypath.is_empty() {
-			if let Ok(f) = std::fs::File::create(&msg.copypath).map(std::io::BufWriter::new) {
-				fcopy = Some(f);
+		for path in msg.paths {
+			if let Ok(f) = std::fs::File::create(&path).map(std::io::BufWriter::new) {
+				writers.push(f);
 			} else {
-				log_error(format!("Failed to open 'copy' replay file for writing. ('{}')", msg.copypath));
+				log_error(format!("Failed to open '{path}' replay file for writing."));
 			}
 		}
 
-		if !msg.wrpath.is_empty() {
-			if let Ok(f) = std::fs::File::create(&msg.wrpath).map(std::io::BufWriter::new) {
-				fwr = Some(f);
-			} else {
-				log_error(format!("Failed to open WR replay file for writing. ('{}')", msg.wrpath));
-			}
-		}
+		let saved = !writers.is_empty();
 
-		let mut saved = false;
-
-		if fcopy.is_some() || fwr.is_some() {
-			saved = true;
-
+		if saved {
 			let cellarray = unsafe { &mut *msg.playerrecording };
 			let frames = unsafe {
 				std::slice::from_raw_parts(
@@ -149,31 +142,24 @@ fn replay_thread(recv: Receiver<Msg>) {
 				)
 			};
 
-			if let Some(f) = &mut fwr {
+			for f in writers.iter_mut() {
 				let _ = f.write_all(&msg.header);
 				let _ = f.write_all(frames);
-			}
-			if let Some(f) = &mut fcopy {
-				let _ = f.write_all(&msg.header);
-				let _ = f.write_all(frames);
-			}
-
-			if let Some(mut f) = fcopy {
-				let _ = f.flush();
-			}
-			if let Some(mut f) = fwr {
 				let _ = f.flush();
 			}
 		}
+
+		drop(writers);
 
 		unsafe {
 			cpp_add_frame_action(
 				do_callback,
 				Box::leak(Box::new(Callbacker {
 					forward: msg.forward,
-					saved:   saved,
-					value:   msg.value,
-					path:    msg.sm_friendly_path,
+					saved,
+					value: msg.value,
+					// TODO: not necessarily a path that was actually saved to but whatever for now...
+					path: msg.sm_friendly_path,
 				})) as *mut _ as *mut c_void,
 			);
 		}

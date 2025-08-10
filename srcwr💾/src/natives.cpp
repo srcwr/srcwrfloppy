@@ -13,8 +13,7 @@ void rust_KILL_replay_thread();
 void rust_post_to_replay_thread(
 	  IChangeableForward* forward // what to pass along to the callback
 	, int value // what to pass along to the callback
-	, const char* wrpath
-	, const char* copypath
+	, const char** paths
 	, const char* header
 	, size_t headersize
 	, void* playerrecording
@@ -51,6 +50,8 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 {
 	cell_t callback = params[1];
 	int value = params[2];
+
+	std::vector<const char*> paths{};
 
 	char *wrpath_friendly, *copypath_friendly, wrpath[PLATFORM_MAX_PATH]{}, copypath[PLATFORM_MAX_PATH]{};
 	(void)ctx->LocalToString(params[3], &wrpath_friendly);
