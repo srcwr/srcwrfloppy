@@ -146,11 +146,12 @@ fn replay_thread(recv: Receiver<Msg>) {
 			for f in writers.iter_mut() {
 				let _ = f.write_all(&msg.header);
 				let _ = f.write_all(frames);
-				let _ = f.flush();
+			}
+
+			for f in writers {
+				let _ = f.into_inner(); // consume & flush & drop
 			}
 		}
-
-		drop(writers);
 
 		unsafe {
 			cpp_add_frame_action(
