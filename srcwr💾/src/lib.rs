@@ -5,7 +5,6 @@
 // TODO: Bleh, static muts...
 #![allow(static_mut_refs)]
 
-use std::ffi::c_char;
 use std::ffi::c_void;
 use std::io::Write;
 use std::ptr::NonNull;
@@ -15,6 +14,7 @@ use std::sync::mpsc::channel;
 use std::thread::JoinHandle;
 
 use extshared::ICellArray::ICellArray;
+use extshared::ICellArray::ICellArray_at;
 use extshared::cpp_add_frame_action;
 use extshared::cpp_extension_log_error;
 use extshared::cpp_forward_execute;
@@ -34,13 +34,12 @@ static mut THREAD: Option<JoinHandle<()>> = None;
 
 #[derive(Debug)]
 struct Msg {
-	forward:          NonNull<c_void>,
-	value:            i32,
-	paths:            Vec<String>,
-	header:           Vec<u8>,
-	playerrecording:  *mut ICellArray,
-	totalframes:      usize,
-	sm_friendly_path: String,
+	forward:         NonNull<c_void>,
+	value:           i32,
+	friendly_paths:  Vec<String>,
+	header:          Vec<u8>,
+	playerrecording: *const ICellArray,
+	totalframes:     usize,
 }
 unsafe impl Send for Msg {} // so we can store the pointers...
 
@@ -78,23 +77,23 @@ pub extern "C" fn rust_KILL_replay_thread() {
 pub extern "C" fn rust_post_to_replay_thread(
 	forward: NonNull<c_void>,
 	value: i32,
-	mut pathschars: *const *const c_char,
+	pathsarray: &ICellArray,
 	header: *const u8,
 	headersize: usize,
-	playerrecording: *mut ICellArray,
+	playerrecording: *const ICellArray,
 	totalframes: usize,
-	sm_friendly_path: *const c_char,
 ) {
 	let mut pathsvec = vec![];
 
 	unsafe {
-		while !((*pathschars).is_null()) {
-			pathsvec.push(strxx(*pathschars, false, 0).unwrap_or_default().to_string());
-			pathschars = pathschars.add(1);
+		let len = pathsarray.size;
+		for i in 0..len {
+			pathsvec.push(strxx(ICellArray_at(pathsarray, i), false, 0).unwrap_or_default().to_string());
 		}
 	}
 
-	let sm_friendly_path = strxx(sm_friendly_path, false, 0).unwrap().to_string();
+	// the wr replay path is pushed to the end of the arraylist, so I want to make that be the first one that is written....
+	pathsvec.reverse();
 
 	let header = unsafe { std::slice::from_raw_parts(header, headersize).to_vec() };
 
@@ -105,11 +104,10 @@ pub extern "C" fn rust_post_to_replay_thread(
 				.send(Msg {
 					forward,
 					value,
-					paths: pathsvec,
+					friendly_paths: pathsvec,
 					header,
 					playerrecording,
 					totalframes,
-					sm_friendly_path,
 				})
 				.unwrap();
 			//println!("posted!");
@@ -123,7 +121,10 @@ fn replay_thread(recv: Receiver<Msg>) {
 
 		let mut writers = vec![];
 
-		for path in msg.paths {
+		// TODO: write to data/replaybot/tmp/ & rename for atomic overwrites?
+
+		for path in &msg.friendly_paths {
+			let path = extshared::build_path(path.as_ptr(), extshared::PathType::Path_Game);
 			if let Ok(f) = std::fs::File::create(&path).map(std::io::BufWriter::new) {
 				writers.push(f);
 			} else {
@@ -134,7 +135,7 @@ fn replay_thread(recv: Receiver<Msg>) {
 		let saved = !writers.is_empty();
 
 		if saved {
-			let cellarray = unsafe { &mut *msg.playerrecording };
+			let cellarray = unsafe { &*msg.playerrecording };
 			let frames = unsafe {
 				std::slice::from_raw_parts(
 					cellarray.data as *const u8,
@@ -159,7 +160,7 @@ fn replay_thread(recv: Receiver<Msg>) {
 					saved,
 					value: msg.value,
 					// TODO: not necessarily a path that was actually saved to but whatever for now...
-					path: msg.sm_friendly_path,
+					path: msg.friendly_paths[0].clone(),
 				})) as *mut _ as *mut c_void,
 			);
 		}

@@ -3,6 +3,7 @@
 
 #include "../../../srcwrtimer/extshared/src/extension.h"
 #include "../../../srcwrtimer/extshared/src/coreident.hpp"
+#include <ICellArray.h>
 
 
 extern "C" {
@@ -13,12 +14,11 @@ void rust_KILL_replay_thread();
 void rust_post_to_replay_thread(
 	  IChangeableForward* forward // what to pass along to the callback
 	, int value // what to pass along to the callback
-	, const char** paths
+	, SourceMod::ICellArray* paths
 	, const char* header
 	, size_t headersize
 	, void* playerrecording
 	, size_t totalframes
-	, const char* sm_friendly_path
 );
 
 }
@@ -48,27 +48,25 @@ void Extension_OnAllLoaded() {}
 
 static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* params)
 {
-	cell_t callback = params[1];
-	int value = params[2];
+	int p = 1;
+	cell_t callback = params[p++];
+	int value = params[p++];
 
-	std::vector<const char*> paths{};
-
-	char *wrpath_friendly, *copypath_friendly, wrpath[PLATFORM_MAX_PATH]{}, copypath[PLATFORM_MAX_PATH]{};
-	(void)ctx->LocalToString(params[3], &wrpath_friendly);
-	(void)ctx->LocalToString(params[4], &copypath_friendly);
-	if (wrpath_friendly[0]) smutils->BuildPath(Path_Game, wrpath, sizeof(wrpath), "%s", wrpath_friendly);
-	if (copypath_friendly[0]) smutils->BuildPath(Path_Game, copypath, sizeof(copypath), "%s", copypath_friendly);
+	ICellArray* paths;
+	Handle_t paths_handle = params[p++];
+	if (HandleError err = ReadHandleCoreIdent(paths_handle, g_ArrayListType, (void**)&paths); err != HandleError_None)
+		return ctx->ThrowNativeError("Invalid ArrayList Handle %x (error %d)", paths_handle, err);
 
 	char* header;
-	(void)ctx->LocalToString(params[5], &header);
-	int headersize = params[6];
+	(void)ctx->LocalToString(params[p++], &header);
+	int headersize = params[p++];
 
 	void* playerrecording;
-	Handle_t playerrecording_handle = params[7];
+	Handle_t playerrecording_handle = params[p++];
 	if (HandleError err = ReadHandleCoreIdent(playerrecording_handle, g_ArrayListType, &playerrecording); err != HandleError_None)
 		return ctx->ThrowNativeError("Invalid ArrayList Handle %x (error %d)", playerrecording_handle, err);
 
-	int totalframes = params[8];
+	int totalframes = params[p++];
 
 	IChangeableForward* fw = forwards->CreateForwardEx(
 		  NULL
@@ -88,13 +86,11 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 	rust_post_to_replay_thread(
 		  fw
 		, value
-		, wrpath
-		, copypath
+		, paths
 		, header
 		, headersize
 		, playerrecording
 		, totalframes
-		, wrpath_friendly[0] ? wrpath_friendly : copypath_friendly
 	);
 
 	return 0; // native marked as void so return value doesn't matter...
