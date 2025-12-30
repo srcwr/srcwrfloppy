@@ -121,14 +121,13 @@ fn replay_thread(recv: Receiver<Msg>) {
 
 		let mut writers = vec![];
 
-		// TODO: write to data/replaybot/tmp/ & rename for atomic overwrites?
-
 		for path in &msg.friendly_paths {
 			let path = extshared::build_path(path.as_ptr(), extshared::PathType::Path_Game);
-			if let Ok(f) = std::fs::File::create(&path).map(std::io::BufWriter::new) {
-				writers.push(f);
+			let tmp = path.clone() + ".tmp";
+			if let Ok(f) = std::fs::File::create(&tmp).map(std::io::BufWriter::new) {
+				writers.push((path, tmp, f));
 			} else {
-				log_error(format!("Failed to open '{path}' replay file for writing."));
+				log_error(format!("Failed to open '{tmp}' replay file for writing."));
 			}
 		}
 
@@ -143,13 +142,19 @@ fn replay_thread(recv: Receiver<Msg>) {
 				)
 			};
 
-			for f in writers.iter_mut() {
+			for (_, _, f) in writers.iter_mut() {
 				let _ = f.write_all(&msg.header);
 				let _ = f.write_all(frames);
 			}
 
-			for f in writers {
-				let _ = f.into_inner(); // consume & flush & drop
+			for (p, t, f) in writers {
+				// BufWriter::into_inner() will flush the buffer.
+				if let Ok(f) = f.into_inner() {
+					// ignoring errors like a boss...
+					let _ = f.sync_all();
+					drop(f);
+					let _ = std::fs::rename(t, p);
+				}
 			}
 		}
 
