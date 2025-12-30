@@ -71,11 +71,10 @@ static cell_t N_SRCWRFloppy_AsyncSaveReplay(IPluginContext* ctx, const cell_t* p
 	IChangeableForward* fw = forwards->CreateForwardEx(
 		  NULL
 		, ET_Ignore
-		, 3
+		, 2
 		, NULL
 		, Param_Any // saved
 		, Param_Any // value
-		, Param_String // sPath
 	);
 	if (!fw || !fw->AddFunction(ctx, callback))
 	{

@@ -19,7 +19,6 @@ use extshared::cpp_add_frame_action;
 use extshared::cpp_extension_log_error;
 use extshared::cpp_forward_execute;
 use extshared::cpp_forward_push_cell;
-use extshared::cpp_forward_push_string;
 use extshared::strxx;
 
 extshared::smext_conf_boilerplate_extension_info!(description, version, author, datestring, url, logtag, license, load);
@@ -47,7 +46,6 @@ struct Callbacker {
 	forward: NonNull<c_void>,
 	saved:   bool,
 	value:   i32,
-	path:    String,
 }
 unsafe impl Send for Callbacker {} // so we can store the pointers...
 
@@ -94,9 +92,6 @@ pub extern "C" fn rust_post_to_replay_thread(
 			}
 		}
 	}
-
-	// the wr replay path is pushed to the end of the arraylist, so I want to make that be the first one that is written....
-	pathsvec.reverse();
 
 	let header = unsafe { std::slice::from_raw_parts(header, headersize).to_vec() };
 
@@ -168,8 +163,6 @@ fn replay_thread(recv: Receiver<Msg>) {
 					forward: msg.forward,
 					saved,
 					value: msg.value,
-					// TODO: not necessarily a path that was actually saved to but whatever for now...
-					path: msg.friendly_paths[0].clone(),
 				})) as *mut _ as *mut c_void,
 			);
 		}
@@ -178,12 +171,10 @@ fn replay_thread(recv: Receiver<Msg>) {
 
 unsafe extern "C" fn do_callback(data: *mut c_void) {
 	unsafe {
-		let mut data = Box::from_raw(data as *mut Callbacker);
+		let data = Box::from_raw(data as *mut Callbacker);
 		cpp_forward_push_cell(data.forward, data.saved as i32);
 		//println!("data.value: {:x}", data.value);
 		cpp_forward_push_cell(data.forward, data.value);
-		data.path.push('\0');
-		cpp_forward_push_string(data.forward, data.path.as_ptr());
 		cpp_forward_execute(data.forward, &mut 0);
 	}
 }
