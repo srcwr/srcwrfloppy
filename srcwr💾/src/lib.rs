@@ -88,7 +88,10 @@ pub extern "C" fn rust_post_to_replay_thread(
 	unsafe {
 		let len = pathsarray.size;
 		for i in 0..len {
-			pathsvec.push(strxx(ICellArray_at(pathsarray, i), false, 0).unwrap_or_default().to_string());
+			let s = strxx(ICellArray_at(pathsarray, i), false, 0).unwrap_or_default().to_string();
+			if !pathsvec.contains(&s) {
+				pathsvec.push(s);
+			}
 		}
 	}
 
