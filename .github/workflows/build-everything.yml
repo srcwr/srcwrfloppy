@@ -22,7 +22,7 @@ jobs:
     strategy:
       matrix:
         targetos: ["linux", "windows"]
-        targetbits: ["x32", "x64"]
+        targetbits: ["x32"] # "x64"
 
     steps:
       - name: Prepare env
