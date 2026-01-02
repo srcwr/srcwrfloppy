@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright 2025 rtldg <rtldg@protonmail.com>
+// Copyright 2025-2026 rtldg <rtldg@protonmail.com>
 
 #![allow(non_snake_case)]
 // TODO: Bleh, static muts...
