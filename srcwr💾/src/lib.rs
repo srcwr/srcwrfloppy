@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright 2025 rtldg <rtldg@protonmail.com>
+// Copyright 2025-2026 rtldg <rtldg@protonmail.com>
 
 #![allow(non_snake_case)]
 // TODO: Bleh, static muts...
 #![allow(static_mut_refs)]
 
-use std::ffi::c_char;
 use std::ffi::c_void;
 use std::io::Write;
 use std::ptr::NonNull;
@@ -15,12 +14,11 @@ use std::sync::mpsc::channel;
 use std::thread::JoinHandle;
 
 use extshared::ICellArray::ICellArray;
+use extshared::ICellArray::ICellArray_at;
 use extshared::cpp_add_frame_action;
 use extshared::cpp_extension_log_error;
 use extshared::cpp_forward_execute;
 use extshared::cpp_forward_push_cell;
-use extshared::cpp_forward_push_string;
-use extshared::strxx;
 
 extshared::smext_conf_boilerplate_extension_info!(description, version, author, datestring, url, logtag, license, load);
 #[unsafe(no_mangle)]
@@ -34,14 +32,12 @@ static mut THREAD: Option<JoinHandle<()>> = None;
 
 #[derive(Debug)]
 struct Msg {
-	forward:          NonNull<c_void>,
-	value:            i32,
-	wrpath:           String,
-	copypath:         String,
-	header:           Vec<u8>,
-	playerrecording:  *mut ICellArray,
-	totalframes:      usize,
-	sm_friendly_path: String,
+	forward:         NonNull<c_void>,
+	value:           i32,
+	friendly_paths:  Vec<String>,
+	header:          Vec<u8>,
+	playerrecording: *const ICellArray,
+	totalframes:     usize,
 }
 unsafe impl Send for Msg {} // so we can store the pointers...
 
@@ -49,7 +45,6 @@ struct Callbacker {
 	forward: NonNull<c_void>,
 	saved:   bool,
 	value:   i32,
-	path:    String,
 }
 unsafe impl Send for Callbacker {} // so we can store the pointers...
 
@@ -79,17 +74,23 @@ pub extern "C" fn rust_KILL_replay_thread() {
 pub extern "C" fn rust_post_to_replay_thread(
 	forward: NonNull<c_void>,
 	value: i32,
-	wrpath: *const c_char,
-	copypath: *const c_char,
+	pathsarray: &ICellArray,
 	header: *const u8,
 	headersize: usize,
-	playerrecording: *mut ICellArray,
+	playerrecording: *const ICellArray,
 	totalframes: usize,
-	sm_friendly_path: *const c_char,
 ) {
-	let wrpath = strxx(wrpath, false, 0).unwrap_or_default().to_string();
-	let copypath = strxx(copypath, false, 0).unwrap_or_default().to_string();
-	let sm_friendly_path = strxx(sm_friendly_path, false, 0).unwrap().to_string();
+	let mut pathsvec = vec![];
+
+	unsafe {
+		let len = pathsarray.size;
+		for i in 0..len {
+			let path = extshared::build_path(ICellArray_at(pathsarray, i) as *const u8, extshared::PathType::Path_Game);
+			if !pathsvec.contains(&path) {
+				pathsvec.push(path);
+			}
+		}
+	}
 
 	let header = unsafe { std::slice::from_raw_parts(header, headersize).to_vec() };
 
@@ -100,12 +101,10 @@ pub extern "C" fn rust_post_to_replay_thread(
 				.send(Msg {
 					forward,
 					value,
-					wrpath,
-					copypath,
+					friendly_paths: pathsvec,
 					header,
 					playerrecording,
 					totalframes,
-					sm_friendly_path,
 				})
 				.unwrap();
 			//println!("posted!");
@@ -117,31 +116,21 @@ fn replay_thread(recv: Receiver<Msg>) {
 	while let Ok(msg) = recv.recv() {
 		//println!("received {msg:?}");
 
-		let mut fcopy = None;
-		let mut fwr = None;
+		let mut writers = vec![];
 
-		if !msg.copypath.is_empty() {
-			if let Ok(f) = std::fs::File::create(&msg.copypath).map(std::io::BufWriter::new) {
-				fcopy = Some(f);
+		for path in &msg.friendly_paths {
+			let tmp = path.clone() + ".tmp";
+			if let Ok(f) = std::fs::File::create(&tmp).map(std::io::BufWriter::new) {
+				writers.push((path, tmp, f));
 			} else {
-				log_error(format!("Failed to open 'copy' replay file for writing. ('{}')", msg.copypath));
+				log_error(format!("Failed to open '{tmp}' replay file for writing."));
 			}
 		}
 
-		if !msg.wrpath.is_empty() {
-			if let Ok(f) = std::fs::File::create(&msg.wrpath).map(std::io::BufWriter::new) {
-				fwr = Some(f);
-			} else {
-				log_error(format!("Failed to open WR replay file for writing. ('{}')", msg.wrpath));
-			}
-		}
+		let saved = !writers.is_empty();
 
-		let mut saved = false;
-
-		if fcopy.is_some() || fwr.is_some() {
-			saved = true;
-
-			let cellarray = unsafe { &mut *msg.playerrecording };
+		if saved {
+			let cellarray = unsafe { &*msg.playerrecording };
 			let frames = unsafe {
 				std::slice::from_raw_parts(
 					cellarray.data as *const u8,
@@ -149,20 +138,19 @@ fn replay_thread(recv: Receiver<Msg>) {
 				)
 			};
 
-			if let Some(f) = &mut fwr {
-				let _ = f.write_all(&msg.header);
-				let _ = f.write_all(frames);
-			}
-			if let Some(f) = &mut fcopy {
+			for (_, _, f) in writers.iter_mut() {
 				let _ = f.write_all(&msg.header);
 				let _ = f.write_all(frames);
 			}
 
-			if let Some(mut f) = fcopy {
-				let _ = f.flush();
-			}
-			if let Some(mut f) = fwr {
-				let _ = f.flush();
+			for (p, t, f) in writers {
+				// BufWriter::into_inner() will flush the buffer.
+				if let Ok(f) = f.into_inner() {
+					// ignoring errors like a boss...
+					let _ = f.sync_all();
+					drop(f);
+					let _ = std::fs::rename(t, p);
+				}
 			}
 		}
 
@@ -171,9 +159,8 @@ fn replay_thread(recv: Receiver<Msg>) {
 				do_callback,
 				Box::leak(Box::new(Callbacker {
 					forward: msg.forward,
-					saved:   saved,
-					value:   msg.value,
-					path:    msg.sm_friendly_path,
+					saved,
+					value: msg.value,
 				})) as *mut _ as *mut c_void,
 			);
 		}
@@ -182,12 +169,10 @@ fn replay_thread(recv: Receiver<Msg>) {
 
 unsafe extern "C" fn do_callback(data: *mut c_void) {
 	unsafe {
-		let mut data = Box::from_raw(data as *mut Callbacker);
+		let data = Box::from_raw(data as *mut Callbacker);
 		cpp_forward_push_cell(data.forward, data.saved as i32);
 		//println!("data.value: {:x}", data.value);
 		cpp_forward_push_cell(data.forward, data.value);
-		data.path.push('\0');
-		cpp_forward_push_string(data.forward, data.path.as_ptr());
 		cpp_forward_execute(data.forward, &mut 0);
 	}
 }
