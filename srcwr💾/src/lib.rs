@@ -19,7 +19,6 @@ use extshared::cpp_add_frame_action;
 use extshared::cpp_extension_log_error;
 use extshared::cpp_forward_execute;
 use extshared::cpp_forward_push_cell;
-use extshared::strxx;
 
 extshared::smext_conf_boilerplate_extension_info!(description, version, author, datestring, url, logtag, license, load);
 #[unsafe(no_mangle)]
@@ -86,9 +85,9 @@ pub extern "C" fn rust_post_to_replay_thread(
 	unsafe {
 		let len = pathsarray.size;
 		for i in 0..len {
-			let s = strxx(ICellArray_at(pathsarray, i), false, 0).unwrap_or_default().to_string();
-			if !pathsvec.contains(&s) {
-				pathsvec.push(s);
+			let path = extshared::build_path(ICellArray_at(pathsarray, i) as *const u8, extshared::PathType::Path_Game);
+			if !pathsvec.contains(&path) {
+				pathsvec.push(path);
 			}
 		}
 	}
@@ -120,7 +119,6 @@ fn replay_thread(recv: Receiver<Msg>) {
 		let mut writers = vec![];
 
 		for path in &msg.friendly_paths {
-			let path = extshared::build_path(path.as_ptr(), extshared::PathType::Path_Game);
 			let tmp = path.clone() + ".tmp";
 			if let Ok(f) = std::fs::File::create(&tmp).map(std::io::BufWriter::new) {
 				writers.push((path, tmp, f));
